@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -5,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>マイ位置情報マップ</title>
     
-    <!-- 1. 無料で使える地図の見た目と動き（Leaflet）を読み込む -->
+    <!-- 無料で使える地図の見た目と動き（Leaflet）を読み込む -->
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
 
@@ -27,7 +28,7 @@
     <div id="mapArea"></div>
 
     <script>
-        // 2. 地図の初期設定（最初は日本全体がなんとなく映るようにする）
+        // 地図の初期設定（最初は日本全体がなんとなく映るようにする）
         const map = L.map('mapArea').setView([35.68, 139.76], 5);
         const statusText = document.getElementById('status');
 
@@ -36,18 +37,14 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // 3. スマホのOS（GPS機能）に「今どこにいる？」と聞く合言葉
+        // スマホのOS（GPS機能）に「今どこにいる？」と聞く合言葉（条件を緩めて素早く取得）
         if (navigator.geolocation) {
-            // 高精度な位置情報を要求する設定
-            navigator.geolocation.getCurrentPosition(successGPS, errorGPS, {
-                enableHighAccuracy: true,
-                timeout: 10000
-            });
+            navigator.geolocation.getCurrentPosition(successGPS, errorGPS);
         } else {
             statusText.innerText = "お使いのブラウザはGPSに対応していません。";
         }
 
-        // 4. GPSの取得に成功した時の処理
+        // GPSの取得に成功した時の処理
         function successGPS(position) {
             const latitude = position.coords.latitude;   // 緯度
             const longitude = position.coords.longitude; // 経度
@@ -63,7 +60,7 @@
                 .openPopup();
         }
 
-        // 5. GPSの取得に失敗した時の処理（部屋の中などで電波が悪いときなど）
+        // GPSの取得に失敗した時の処理
         function errorGPS(error) {
             statusText.innerText = "位置情報の取得に失敗しました。設定で位置情報を許可してください。";
             console.log(error.message);
@@ -71,4 +68,3 @@
     </script>
 </body>
 </html>
-
