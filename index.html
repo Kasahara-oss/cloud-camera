@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マイ雲カメラ</title>
+    <style>
+        /* 画面全体の見た目を整えるデザイン（CSS） */
+        body { font-family: sans-serif; text-align: center; background: #222; color: #fff; margin: 0; padding: 20px; }
+        h1 { font-size: 20px; }
+        video, canvas { width: 100%; max-width: 400px; border-radius: 10px; background: #000; margin-bottom: 10px; }
+        button { font-size: 18px; padding: 12px 24px; border: none; border-radius: 25px; background: #007aff; color: white; cursor: pointer; }
+        button:active { background: #0056b3; }
+        #resultArea { margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <h1>自分だけの雲カメラ</h1>
+    
+    <!-- スマホのカメラ映像がリアルタイムで映る枠 -->
+    <video id="cameraView" autoplay playsinline></video>
+    
+    <br>
+    <!-- シャッターボタン -->
+    <button id="shutterBtn">撮影する</button>
+
+    <div id="resultArea">
+        <h3>撮影された写真</h3>
+        <!-- 撮影した静止画を固定して表示する枠 -->
+        <canvas id="photoCapture"></canvas>
+    </div>
+
+    <script>
+        // カメラを制御するプログラム（JavaScript）
+        const video = document.getElementById('cameraView');
+        const canvas = document.getElementById('photoCapture');
+        const button = document.getElementById('shutterBtn');
+        const ctx = canvas.getContext('2d');
+
+        // 1. スマホのカメラを起動する処理
+        async function initCamera() {
+            try {
+                // 背面カメラ（environment）を最優先で起動する設定
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } },
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("カメラの起動に失敗しました: " + err.message);
+            }
+        }
+
+        // 2. シャッターボタンを押した時の処理
+        button.addEventListener('click', () => {
+            // ビデオの横幅と縦幅をそのまま写真のサイズにする
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            // 映像の一瞬を切り取って下の枠（canvas）に描画する
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // 将来ここに「AIに写真を送って雲の名前をもらうコード」を追加できます
+            alert("パシャリ！写真が保存されました（ここにAIを繋げます）");
+        });
+
+        // ページが開かれたら自動的にカメラを起動する
+        initCamera();
+    </script>
+</body>
+</html>
