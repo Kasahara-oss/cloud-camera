@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -6,65 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>マイ位置情報マップ</title>
     
-    <!-- 無料で使える地図の見た目と動き（Leaflet）を読み込む -->
-    <link rel="stylesheet" href="https://unpkg.com" />
-    <script src="https://unpkg.com"></script>
+    <!-- 完全に安全なHTTPS通信で地図データを読み込む -->
+    <link rel="stylesheet" href="https://cloudflare.com" />
+    <script src="https://cloudflare.com"></script>
 
     <style>
-        /* 画面全体のデザイン設定（CSS） */
         body { font-family: sans-serif; margin: 0; padding: 0; background: #f0f0f0; text-align: center; }
         h1 { font-size: 18px; margin: 10px 0; color: #333; }
-        /* 地図を表示するエリアの大きさを指定 */
         #mapArea { width: 100%; height: 80vh; background: #ddd; }
-        #status { font-size: 14px; color: #666; margin: 5px; }
+        #status { font-size: 14px; color: #666; margin: 5px; padding: 0 10px; }
     </style>
 </head>
 <body>
 
     <h1>自分だけのGPSマップ</h1>
-    <div id="status">位置情報を取得中...</div>
-    
-    <!-- 地図が埋め込まれる枠 -->
+    <div id="status">位置情報を取得中（最大10秒お待ちください）...</div>
     <div id="mapArea"></div>
 
     <script>
-        // 地図の初期設定（最初は日本全体がなんとなく映るようにする）
+        // 地図の初期設定（最初は日本全体を表示）
         const map = L.map('mapArea').setView([35.68, 139.76], 5);
         const statusText = document.getElementById('status');
 
-        // 世界の無料地図データ（OpenStreetMap）を取り込んで背景に敷く
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+            attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
-        // スマホのOS（GPS機能）に「今どこにいる？」と聞く合言葉（条件を緩めて素早く取得）
+        // iPhoneのガードを突破するGPS設定（タイムアウトと過去データ利用をON）
+        const gpsOptions = {
+            enableHighAccuracy: false, // 部屋の中でも拾いやすいように緩める
+            timeout: 10000,            // 10秒経ったらフリーズせずエラーを出す
+            maximumAge: 60000          // 1分以内にスマホが取得した位置があればそれを即採用
+        };
+
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(successGPS, errorGPS);
+            navigator.geolocation.getCurrentPosition(successGPS, errorGPS, gpsOptions);
         } else {
             statusText.innerText = "お使いのブラウザはGPSに対応していません。";
         }
 
-        // GPSの取得に成功した時の処理
         function successGPS(position) {
-            const latitude = position.coords.latitude;   // 緯度
-            const longitude = position.coords.longitude; // 経度
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
 
             statusText.innerText = `現在地を検出しました！（緯度:${latitude.toFixed(4)}, 経度:${longitude.toFixed(4)}）`;
-
-            // 地図の中心を、あなたの現在地にズームインする（拡大率16）
             map.setView([latitude, longitude], 16);
 
-            // あなたの現在地に「ピン（マーカー）」を立てる
             L.marker([latitude, longitude]).addTo(map)
                 .bindPopup('あなたはココにいます！')
                 .openPopup();
         }
 
-        // GPSの取得に失敗した時の処理
         function errorGPS(error) {
-            statusText.innerText = "位置情報の取得に失敗しました。設定で位置情報を許可してください。";
-            console.log(error.message);
+            // フリーズせず、ここを通って画面に原因を表示させます
+            statusText.innerText = `エラーが発生しました (${error.message})。スマホの設定や電波を確認してください。`;
         }
     </script>
 </body>
 </html>
+
+
