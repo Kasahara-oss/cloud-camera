@@ -1,0 +1,36 @@
+# .github/workflows/deploy.yml
+name: 雲カメラ自動デプロイ(CD)ロボット
+
+# コードが「main」または「master」ブランチに送信（push）されたら起動する
+on:
+  push:
+    branches:
+      - main
+      - master
+
+# ロボット（CI/CD）が実行する具体的な仕事内容
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # 1. ハッカーの危険なコードが入っていないかチェック（簡易的なCI体験）
+      - name: セキュリティ・コードチェック
+        run: |
+          echo "ソースコードの安全性をスキャン中..."
+          if grep -q "UNION SELECT" index.html; then
+            echo "❌ 警告: 危険なSQL命令が検出されました！公開をストップします。"
+            exit 1
+          fi
+          echo "✅ 検査合格。安全なコードです。"
+
+      # 2. GitHub Pagesへ自動的に公開手続きを進める（CDの実行）
+      - name: 本番サーバへ引っ越し（デプロイ）
+        uses: actions/checkout@v4
+
+      - name: GitHub Pagesへの公開を完了させる
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
