@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自分だけの雲カメラ</title>
+    <style>
+        /* 縦型レイアウトの構成 */
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f4f8;
+            font-family: sans-serif;
+            min-height: 100vh;
+        }
+        /* 【最上部】タイトルエリア */
+        header {
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #334e68;
+        }
+        /* 【上部】リアルタイム映像枠 */
+        .video-container {
+            width: 90%;
+            max-width: 400px;
+            aspect-ratio: 4 / 3;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* 【中央】大きな「撮影する」シャッターボタン */
+        .button-container {
+            margin: 20px 0;
+        }
+        /* ★この青色を後で自動デプロイで変える練習をします */
+        #shutter-btn {
+            background-color: #0066cc; 
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* 【下部】撮影された写真枠 */
+        .photo-container {
+            width: 90%;
+            max-width: 400px;
+            aspect-ratio: 4 / 3;
+            background-color: #ccc;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 【最上部】 -->
+    <header>自分だけの雲カメラ</header>
+
+    <!-- 【上部】 -->
+    <div class="video-container">
+        <video id="video" autoplay playsinline muted></video>
+    </div>
+
+    <!-- 【中央】 -->
+    <div class="button-container">
+        <button id="shutter-btn">撮影する</button>
+    </div>
+
+    <!-- 【下部】 -->
+    <div class="photo-container">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const btn = document.getElementById('shutter-btn');
+
+        // スマホのカメラを起動してvideoタグに流す
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => console.error("カメラの起動に失敗:", err));
+
+        // シャッターボタンを押した一瞬を切り取ってcanvasに固定表示
+        btn.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        });
+    </script>
+</body>
+</html>
