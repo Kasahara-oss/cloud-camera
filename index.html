@@ -3,59 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マイ位置情報数値化アプリ</title>
+    <title>自分だけの雲カメラ</title>
     <style>
-        /* 画面全体のデザイン設定（数字を大きく見やすくする） */
-        body { font-family: sans-serif; margin: 0; padding: 40px 20px; background: #222; color: #fff; text-align: center; }
-        h1 { font-size: 22px; margin-bottom: 30px; color: #007aff; }
-        .result-box { background: #333; padding: 20px; border-radius: 10px; margin: 20px 0; font-size: 18px; line-height: 2; }
-        .number { font-size: 28px; font-weight: bold; color: #4cd964; }
-        #status { font-size: 16px; color: #aaa; }
+        /* 縦型レイアウトの構成 */
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f4f8;
+            font-family: sans-serif;
+            min-height: 100vh;
+        }
+        /* 【最上部】タイトルエリア */
+        header {
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #334e68;
+        }
+        /* 【上部】リアルタイム映像枠 */
+        .video-container {
+            width: 90%;
+            max-width: 400px;
+            aspect-ratio: 4 / 3;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        /* 【中央】大きな「撮影する」シャッターボタン */
+        .button-container {
+            margin: 20px 0;
+        }
+        /* ★この青色を後で自動デプロイで変える練習をします */
+        #shutter-btn {
+            background-color: #0066cc; 
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* 【下部】撮影された写真枠 */
+        .photo-container {
+            width: 90%;
+            max-width: 400px;
+            aspect-ratio: 4 / 3;
+            background-color: #ccc;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+        }
     </style>
 </head>
 <body>
 
-    <h1>自分だけのGPS数値化</h1>
-    
-    <div id="status">位置情報を取得中...</div>
+    <!-- 【最上部】 -->
+    <header>自分だけの雲カメラ</header>
 
-    <!-- 緯度と経度を表示するエリア -->
-    <div class="result-box">
-        <div>緯度 (Latitude):</div>
-        <div id="latArea" class="number">--.----</div>
-        <div style="margin-top: 10px;">経度 (Longitude):</div>
-        <div id="lonArea" class="number">--.----</div>
+    <!-- 【上部】 -->
+    <div class="video-container">
+        <video id="video" autoplay playsinline muted></video>
+    </div>
+
+    <!-- 【中央】 -->
+    <div class="button-container">
+        <button id="shutter-btn">撮影する</button>
+    </div>
+
+    <!-- 【下部】 -->
+    <div class="photo-container">
+        <canvas id="canvas"></canvas>
     </div>
 
     <script>
-        const statusText = document.getElementById('status');
-        const latText = document.getElementById('latArea');
-        const lonText = document.getElementById('lonArea');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const btn = document.getElementById('shutter-btn');
 
-        // スマホのGPS機能にアクセス（過去の古いデータを即座に再利用する超軽量設定）
-        const options = {
-            enableHighAccuracy: false,
-            maximumAge: 300000 // 5分以内にスマホが測ったデータがあれば即採用
-        };
+        // スマホのカメラを起動してvideoタグに流す
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => console.error("カメラの起動に失敗:", err));
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(successGPS, errorGPS, options);
-        } else {
-            statusText.innerText = "お使いのブラウザはGPSに対応していません。";
-        }
-
-        // GPS取得成功
-        function successGPS(position) {
-            statusText.innerText = "現在地を正常に検出しました！";
-            latText.innerText = position.coords.latitude.toFixed(5);   // 緯度を小数点5桁まで表示
-            lonText.innerText = position.coords.longitude.toFixed(5);  // 経度を小数点5桁まで表示
-        }
-
-        // GPS取得失敗
-        function errorGPS(error) {
-            statusText.innerText = "エラー発生: " + error.message;
-        }
+        // シャッターボタンを押した一瞬を切り取ってcanvasに固定表示
+        btn.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        });
     </script>
 </body>
 </html>
-
