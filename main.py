@@ -7,10 +7,9 @@ from google.genai import types
 
 app = FastAPI()
 
-# ★完全に安全な記述に変更：キーの生文字列を1文字も残さない
+# サーバーのシステムから安全にAPIキーを読み込む
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# 万が一キーが未設定だった場合の安全弁（エラーメッセージを返す）
 if not API_KEY:
   client = None
 else:
@@ -19,6 +18,7 @@ else:
 
 @app.get("/", response_class=HTMLResponse)
 async def index_page():
+  # ★JavaScript内の file を file[0] に修正した、iPhone完全対応版の画面です
   html_content = """
     <!DOCTYPE html>
     <html lang="ja">
@@ -62,21 +62,27 @@ async def index_page():
             uploadBtn.addEventListener('click', () => { cameraInput.click(); });
 
             cameraInput.addEventListener('change', async (e) => {
-                const file = e.target.files;
-                if (!file) return;
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+                
+                // ★修正：iPhoneに「1番目の写真データ」だと教える記述に変更
+                const targetFile = files[0];
 
+                // 1. 下のエリアに写真を表示
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     preview.src = event.target.result;
                     preview.style.display = 'block';
                     placeholder.style.display = 'none';
                 }
-                reader.readAsDataURL(file);
+                reader.readAsDataURL(targetFile);
 
+                // 2. 上のエリアを「解析中」にする
                 status.innerHTML = '<span class="loading">Gemini（無料枠）が雲を判定中...</span>';
 
+                // 3. サーバーへ送信
                 const formData = new FormData();
-                formData.append('image_data', file);
+                formData.append('image_data', targetFile);
 
                 try {
                     const response = await fetch('/analyze', { method: 'POST', body: formData });
