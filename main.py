@@ -14,7 +14,7 @@ st.write("CelesTrakの最新軌道データから、現在地をリアルタイ�
 
 # 🔄 手動更新ボタン
 if st.button("🔄 画面を最新に位置更新"):
-    st.clear_cache()
+    st.cache_data.clear()  # ✨ 正しいキャッシュ消去の命令に直しました
     st.rerun()
 
 # 🌐 CelesTrakから「みちびき（QZSS）」のデータを直接取得
