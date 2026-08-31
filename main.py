@@ -1,43 +1,42 @@
 import streamlit as st
 import pandas as pd
-import os
+import requests
 import io
 from datetime import datetime, timezone, timedelta
 from sgp4.api import Satrec, jday
 import math
 
-# 🎨 画面の設定
 st.set_page_config(page_title="みちびきリアルタイムトラッカー", page_icon="🛰️", layout="centered")
 st.title("🛰️ 準天頂衛星「みちびき」位置モニター")
-st.write("ラズパイから同期された確実な軌道データから、現在地をリアルタイム計算しています。")
+st.write("1分おきに自宅のラズパイから最新の軌道データを取得し、リアルタイムに位置を計算しています。")
 
-# 🔄 手動更新ボタン
+# ⏱️ 1分おきに画面を強制自動更新するボタン代わりのリロード
 if st.button("🔄 画面を最新に位置更新"):
     st.rerun()
 
-# Renderサーバー内に保存されるCSVファイルのパス（同じフォルダ内）
-CSV_FILE = "qzss_data.csv"
+# 🌐 あなたが構築したCloudflare Tunnel経由で、ラズパイの温湿度と同じルートからCSVを引っ張ってきます
+# ※ポート番号やパス（/qzss_data.csv）は後述のラズパイの設定と連動します
+LAPAI_URL = "https://my-home-sensor.win"
 
-# 📡 【ラズパイからの送信を受け取る窓口】
-# Streamlitの裏側の仕組みを使って、ラズパイが「/upload」にCSVをPOSTしてきたら保存します
-# ※画面表示に影響しないように、関数の外でクエリパラメータをチェックします
-query_params = st.query_params
-if "action" in query_params and query_params["action"] == "upload":
-    # ラズパイからの通信である場合、送信されたCSVデータを保存して終了
-    st.cache_data.clear() # キャッシュをクリア
-    st.write("Data sync mode active.")
-    # ※この特殊な通信用ルートはラズパイのスクリプトが使います
-
-# 🗺️ 地図の描画処理
-if os.path.exists(CSV_FILE):
+@st.cache_data(ttl=50)  # 1分（60秒）未満のアクセスはラズパイに負担をかけないようキャッシュします
+def get_data_from_raspi():
     try:
-        df_qzss = pd.read_csv(CSV_FILE)
-        
+        response = requests.get(LAPAI_URL, timeout=10)
+        if response.status_code == 200:
+            return response.text
+    except Exception as e:
+        st.error(f"ラズパイからのデータ取得に失敗しました: {e}")
+    return None
+
+csv_text = get_data_from_raspi()
+
+if csv_text:
+    try:
+        df_qzss = pd.read_csv(io.StringIO(csv_text))
         now = datetime.now(timezone.utc)
         jd, fr = jday(now.year, now.month, now.day, now.hour, now.minute, now.second + now.microsecond/1e6)
         
         sat_positions = []
-        
         for index, row in df_qzss.iterrows():
             name = row.get('OBJECT_NAME')
             line1 = row.get('TLE_LINE1')
@@ -76,9 +75,7 @@ if os.path.exists(CSV_FILE):
             jst_time = datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S')
             st.subheader(f"📋 衛星の位置データ一覧 ({jst_time} JST)")
             st.dataframe(df_map, use_container_width=True)
-        else:
-            st.warning("CSVデータはありますが、衛星位置の計算に失敗しました。")
     except Exception as e:
-        st.error(f"ファイル読み込みエラー: {e}")
+        st.error(f"データ解析エラー: {e}")
 else:
-    st.info("🛰️ ラズパイからの初回データ同期を待っています...（現在データがまだありません）")
+    st.info("🛰️ 自宅のラズパイからのデータ応答を待っています...")
