@@ -10,21 +10,22 @@ st.set_page_config(page_title="みちびきリアルタイムトラッカー", p
 
 CSV_FILE = "qzss_data.csv"
 
-# 📡 【重要：ラズパイからの直接POSTデータを受け取る窓口】
-# URLの末尾に「?action=sync」をつけてPOSTされた場合、画面を作らずにファイルを保存します
-query_params = st.query_params
-if "action" in query_params and query_params["action"] == "sync":
-    # Streamlitの裏側で動くリクエストオブジェクトから生データを取得
-    try:
-        import io
-        # クエリパラメータ経由で届いた生テキストをCSVに書き出し
-        tle_data = query_params.get("data")
-        if tle_data:
+# 📡 【最新仕様：ラズパイからのデータ送信を100%確実にキャッチする窓口】
+# st.query_params の内容を一度 Python の辞書形式（.to_dict()）に変換することで、
+# 最新のStreamlit仕様でもデータがリストにならず、正しい文字列として確実に読み込めるようになります。
+params = st.query_params.to_dict()
+
+if "action" in params and params["action"] == "sync":
+    tle_data = params.get("data")
+    if tle_data:
+        try:
             rows = []
+            # ラズパイから届いた軽量な数値の塊（Line1*Line2|...）を元のTLE構造に分解・復元します
             satellites = [sat for sat in tle_data.split("|") if sat]
             for idx, sat in enumerate(satellites):
                 if "*" in sat:
                     l1, l2 = sat.split("*")
+                    # カタログ番号をもとに、衛星の名前を自動で割り振ります
                     name = f"QZSS SATELLITE #{idx+1}"
                     if "38148" in l1: name = "MICHIBIKI-1 (QZSS)"
                     elif "42738" in l1: name = "MICHIBIKI-2 (QZSS)"
@@ -34,13 +35,14 @@ if "action" in query_params and query_params["action"] == "sync":
                     rows.append([name, l1, l2])
             
             if rows:
+                # 復元したデータをCSVファイルとしてRenderサーバー内にがっちり書き込み保存します
                 df_sync = pd.DataFrame(rows, columns=['OBJECT_NAME', 'TLE_LINE1', 'TLE_LINE2'])
                 df_sync.to_csv(CSV_FILE, index=False)
-                st.write("SUCCESS") # ラズパイへの成功合図
-                st.stop() # 画面の描画を強制停止して終了
-    except Exception as e:
-        st.write(f"ERROR: {e}")
-        st.stop()
+                st.write("SUCCESS") # ラズパイ側への成功合図
+                st.stop() # 画面の描画をここで強制停止して通信を終了します
+        except Exception as e:
+            st.write(f"ERROR: {e}")
+            st.stop()
 
 # ─── ここから下は通常のスマホ閲覧用の地図画面 ───
 st.title("🛰️ 準天頂衛星「みちびき」位置モニター")
@@ -74,6 +76,7 @@ if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
                 hyp = math.sqrt(x**2 + y**2)
                 lat = math.degrees(math.atan2(z, hyp))
                 
+                # 地球の自転を考慮した経度補正
                 hours_since_utc = now.hour + now.minute/60.0 + now.second/3600.0
                 long = (long - (hours_since_utc * 15.04107)) % 360
                 if long > 180:
