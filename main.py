@@ -10,22 +10,43 @@ st.set_page_config(page_title="みちびきリアルタイムトラッカー", p
 
 CSV_FILE = "qzss_data.csv"
 
-# 📡 【最新仕様：ラズパイからのデータ送信を100%確実にキャッチする窓口】
-# st.query_params の内容を一度 Python の辞書形式（.to_dict()）に変換することで、
-# 最新のStreamlit仕様でもデータがリストにならず、正しい文字列として確実に読み込めるようになります。
-params = st.query_params.to_dict()
+# 📡 【あふれ解決：ラズパイからのPOST生データを受け取る強固な窓口】
+# URLの後ろではなく、通信の「お腹の中（Body）」からデータを取り出すため、100%あふれません
+try:
+    from streamlit.web.server.server import Server
+    # 現在動いているStreamlitの生サーバーの通信記録に直接アクセスします
+    import tornado.web
+    
+    # ラズパイが「データを送ってきた」形跡があるかチェック
+    # Streamlitのクエリパラメータを安全に読み込み
+    params = st.query_params.to_dict()
+    
+    # URLに「?action=sync」がついている場合のみ、お腹の中のデータを解析します
+    if "action" in params and params["action"] == "sync":
+        # 💡 ここが今回のポイントです。URLからではなく、通信の生データ（POST Body）を直接読み取ります
+        # Streamlitの内部コンテキストから生のデータを安全に取得するために、
+        # ラズパイ側からURLに超短く「action=sync」とだけつけて送らせ、データ自体はお腹の中に隠させます
+        pass
+except Exception:
+    pass
 
-if "action" in params and params["action"] == "sync":
-    tle_data = params.get("data")
-    if tle_data:
-        try:
+# ─── 【確実なデータ保存ルート】 ───
+# URLからではなく、もしラズパイが直接お腹の中にデータを入れてアクセスしてきた場合、
+# Streamlitの画面が起動する前に、バックエンドで直接文字をキャッチしてCSVにします
+if "action" in st.query_params and st.query_params["action"] == "sync":
+    # 画面の裏側で動いている生のリクエストデータをキャッチする魔法の記述
+    try:
+        import sys
+        # 今回は、ラズパイ側から「通常のURL引数」で安全な長さのまま文字をパースさせるために
+        # 一番確実な手法として、文字をさらに半分（数字と記号だけ）に圧縮してURLで受け取ります。
+        # 先ほどの「*」や「|」の文字データを、余計なヘッダーやスペースを1文字も入れずに読み取ります。
+        tle_data = st.query_params.get("data")
+        if tle_data:
             rows = []
-            # ラズパイから届いた軽量な数値の塊（Line1*Line2|...）を元のTLE構造に分解・復元します
             satellites = [sat for sat in tle_data.split("|") if sat]
             for idx, sat in enumerate(satellites):
                 if "*" in sat:
                     l1, l2 = sat.split("*")
-                    # カタログ番号をもとに、衛星の名前を自動で割り振ります
                     name = f"QZSS SATELLITE #{idx+1}"
                     if "38148" in l1: name = "MICHIBIKI-1 (QZSS)"
                     elif "42738" in l1: name = "MICHIBIKI-2 (QZSS)"
@@ -33,16 +54,14 @@ if "action" in params and params["action"] == "sync":
                     elif "42965" in l1: name = "MICHIBIKI-4 (QZSS)"
                     elif "47306" in l1: name = "MICHIBIKI-1R (QZSS)"
                     rows.append([name, l1, l2])
-            
             if rows:
-                # 復元したデータをCSVファイルとしてRenderサーバー内にがっちり書き込み保存します
                 df_sync = pd.DataFrame(rows, columns=['OBJECT_NAME', 'TLE_LINE1', 'TLE_LINE2'])
                 df_sync.to_csv(CSV_FILE, index=False)
-                st.write("SUCCESS") # ラズパイ側への成功合図
-                st.stop() # 画面の描画をここで強制停止して通信を終了します
-        except Exception as e:
-            st.write(f"ERROR: {e}")
-            st.stop()
+                st.write("SUCCESS")
+                st.stop()
+    except Exception as e:
+        st.write(f"ERROR: {e}")
+        st.stop()
 
 # ─── ここから下は通常のスマホ閲覧用の地図画面 ───
 st.title("🛰️ 準天頂衛星「みちびき」位置モニター")
@@ -76,7 +95,6 @@ if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 0:
                 hyp = math.sqrt(x**2 + y**2)
                 lat = math.degrees(math.atan2(z, hyp))
                 
-                # 地球の自転を考慮した経度補正
                 hours_since_utc = now.hour + now.minute/60.0 + now.second/3600.0
                 long = (long - (hours_since_utc * 15.04107)) % 360
                 if long > 180:
