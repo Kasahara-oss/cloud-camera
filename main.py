@@ -9,7 +9,7 @@ st.write("撮影した写真をAIが判定し、雲の名前や天気の傾向�
 # Gemini APIの初期化（Renderの環境変数から取得）
 api_key = os.environ.get("GEMINI_API_KEY")
 
-uploaded_file = st.file_uploader("真ん中のボタンを押して撮影してください。", type=["jpg", "jpeg", "png"], capture="camera")
+uploaded_file = st.file_uploader("真ん中のボタンを押して撮影してください。", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
     st.image(uploaded_file, caption="撮影した写真", use_container_width=True)
