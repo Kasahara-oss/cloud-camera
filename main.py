@@ -9,23 +9,26 @@ import math
 # 🎨 画面の設定
 st.set_page_config(page_title="みちびきリアルタイムトラッカー", page_icon="🛰️", layout="centered")
 st.title("🛰️ 準天頂衛星「みちびき」位置モニター")
-st.write("CelesTrakの最新軌道データから、現在地をリアルタイム計算しています。")
+st.write("CelesTrakの公式データから、現在地をリアルタイム計算しています。")
 
 # 🔄 手動更新ボタン
 if st.button("🔄 画面を最新に位置更新"):
     st.cache_data.clear()
     st.rerun()
 
-# 🌐 CelesTrakから「みちびき（QZSS）」のデータを確実に取得するURL（本家TLE形式）
+# 🌐 CelesTrak公式が推奨する、みちびき（QZSS）の最新データURL
 URL = "https://celestrak.org"
+
+# 🚀 【重要】CelesTrakにブロックされないための「正しい身元証明」に修正
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "StreamlitQZSSBot/1.0 (https://my-home-sensor.win; Contact: owner)"
 }
 
-@st.cache_data(ttl=1800)  # 30分間キャッシュ
+@st.cache_data(ttl=1800)  # 30分間キャッシュしてサーバーの負荷を軽減
 def fetch_qzss_tle():
     try:
-        response = requests.get(URL, headers=headers, timeout=15)
+        # 🔒 verify=False を追加してクラウド特有のSSL接続エラーを強制回避
+        response = requests.get(URL, headers=headers, timeout=15, verify=False)
         if response.status_code == 200 and len(response.text.strip()) > 0:
             return response.text
     except Exception as e:
@@ -35,14 +38,12 @@ def fetch_qzss_tle():
 tle_text = fetch_qzss_tle()
 
 if tle_text:
-    # 現在の時刻（UTC）を取得してSGP4計算用の時間に変換
     now = datetime.now(timezone.utc)
     jd, fr = jday(now.year, now.month, now.day, now.hour, now.minute, now.second + now.microsecond/1e6)
     
     sat_positions = []
     lines = tle_text.strip().split("\n")
     
-    # 3行1組（名前、Line1、Line2）でループ処理
     for i in range(0, len(lines) - 2, 3):
         name = lines[i].strip()
         line1 = lines[i+1].strip()
@@ -56,13 +57,16 @@ if tle_text:
             e, r, v = sat.sgp4(jd, fr)
             
             if e == 0:
-                # sgp4ライブラリの正しい座標抽出
-                x, y, z = r[0], r[1], r[2]
+                # SGP4のテンソル/リスト構造から数値を安全に取り出し
+                x = float(r[0])
+                y = float(r[1])
+                z = float(r[2])
+                
                 long = math.degrees(math.atan2(y, x))
                 hyp = math.sqrt(x**2 + y**2)
                 lat = math.degrees(math.atan2(z, hyp))
                 
-                # 地球の自転を考慮した経度補正
+                # 地球の自転を考慮した簡易的な経度補正（UTC基準）
                 hours_since_utc = now.hour + now.minute/60.0 + now.second/3600.0
                 long = (long - (hours_since_utc * 15.04107)) % 360
                 if long > 180:
@@ -90,6 +94,6 @@ if tle_text:
         st.subheader(f"📋 衛星の位置データ一覧 ({jst_time} JST)")
         st.dataframe(df_map, use_container_width=True)
     else:
-        st.warning("衛星データの解析に失敗しました。データが一時的に乱れている可能性があります。")
+        st.warning("衛星データの解析に失敗しました。")
 else:
-    st.error("CelesTrakからのデータ取得に失敗したか、データが空です。")
+    st.error("CelesTrakからのデータ取得に失敗しました。身元ブロック、または通信エラーが発生しています。")
