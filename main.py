@@ -1,38 +1,51 @@
 import streamlit as st
 import pandas as pd
-import requests
-import io
+import os
 from datetime import datetime, timezone, timedelta
 from sgp4.api import Satrec, jday
 import math
 
 st.set_page_config(page_title="みちびきリアルタイムトラッカー", page_icon="🛰️", layout="centered")
 st.title("🛰️ 準天頂衛星「みちびき」位置モニター")
-st.write("1分おきに自宅のラズパイから最新の軌道データを取得し、リアルタイムに位置を計算しています。")
+st.write("ラズパイから同期された確実な軌道データから、現在地をリアルタイム計算しています。")
 
-# ⏱️ 1分おきに画面を強制自動更新するボタン代わりのリロード
 if st.button("🔄 画面を最新に位置更新"):
     st.rerun()
 
-# 🌐 あなたが構築したCloudflare Tunnel経由で、ラズパイの温湿度と同じルートからCSVを引っ張ってきます
-# ※ポート番号やパス（/qzss_data.csv）は後述のラズパイの設定と連動します
-LAPAI_URL = "https://my-home-sensor.win"
+CSV_FILE = "qzss_data.csv"
 
-@st.cache_data(ttl=50)  # 1分（60秒）未満のアクセスはラズパイに負担をかけないようキャッシュします
-def get_data_from_raspi():
+# 📡 【ラズパイからの超軽量データ送信を受け取る窓口】
+query_params = st.query_params
+if "action" in query_params and query_params["action"] == "sync":
+    tle_data = query_params.get("data")
+    if tle_data:
+        try:
+            rows = []
+            # 軽量化されたデータを元のTLE構造（名前、Line1、Line2）に復元
+            satellites = [sat for sat in tle_data.split("|") if sat]
+            for idx, sat in enumerate(satellites):
+                if "*" in sat:
+                    l1, l2 = sat.split("*")
+                    # カタログ番号から名前を自動で同定
+                    name = f"QZSS SATELLITE #{idx+1}"
+                    if "38148" in l1: name = "MICHIBIKI-1 (QZSS)"
+                    elif "42738" in l1: name = "MICHIBIKI-2 (QZSS)"
+                    elif "42917" in l1: name = "MICHIBIKI-3 (QZSS)"
+                    elif "42965" in l1: name = "MICHIBIKI-4 (QZSS)"
+                    elif "47306" in l1: name = "MICHIBIKI-1R (QZSS)"
+                    rows.append([name, l1, l2])
+            
+            if rows:
+                df_sync = pd.DataFrame(rows, columns=['OBJECT_NAME', 'TLE_LINE1', 'TLE_LINE2'])
+                df_sync.to_csv(CSV_FILE, index=False)
+                st.success("ラズパイとの軌道データ同期に成功しました！")
+        except Exception as e:
+            st.error(f"同期エラー: {e}")
+
+# 🗺️ 地図の描画処理
+if os.path.exists(CSV_FILE):
     try:
-        response = requests.get(LAPAI_URL, timeout=10)
-        if response.status_code == 200:
-            return response.text
-    except Exception as e:
-        st.error(f"ラズパイからのデータ取得に失敗しました: {e}")
-    return None
-
-csv_text = get_data_from_raspi()
-
-if csv_text:
-    try:
-        df_qzss = pd.read_csv(io.StringIO(csv_text))
+        df_qzss = pd.read_csv(CSV_FILE)
         now = datetime.now(timezone.utc)
         jd, fr = jday(now.year, now.month, now.day, now.hour, now.minute, now.second + now.microsecond/1e6)
         
@@ -76,6 +89,6 @@ if csv_text:
             st.subheader(f"📋 衛星の位置データ一覧 ({jst_time} JST)")
             st.dataframe(df_map, use_container_width=True)
     except Exception as e:
-        st.error(f"データ解析エラー: {e}")
+        st.error(f"ファイル読み込みエラー: {e}")
 else:
-    st.info("🛰️ 自宅のラズパイからのデータ応答を待っています...")
+    st.info("🛰️ ラズパイからの初回データ同期を待っています...")
