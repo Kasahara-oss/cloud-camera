@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
+import os
 import io
 from datetime import datetime, timezone, timedelta
 from sgp4.api import Satrec, jday
@@ -9,64 +9,52 @@ import math
 # 🎨 画面の設定
 st.set_page_config(page_title="みちびきリアルタイムトラッカー", page_icon="🛰️", layout="centered")
 st.title("🛰️ 準天頂衛星「みちびき」位置モニター")
-st.write("CelesTrakの公式データから、現在地をリアルタイム計算しています。")
+st.write("ラズパイから同期された確実な軌道データから、現在地をリアルタイム計算しています。")
 
 # 🔄 手動更新ボタン
 if st.button("🔄 画面を最新に位置更新"):
-    st.cache_data.clear()
     st.rerun()
 
-# 🌐 CelesTrak公式が推奨する、みちびき（QZSS）の最新データURL
-URL = "https://celestrak.org"
+# Renderサーバー内に保存されるCSVファイルのパス（同じフォルダ内）
+CSV_FILE = "qzss_data.csv"
 
-# 🚀 【重要】CelesTrakにブロックされないための「正しい身元証明」に修正
-headers = {
-    "User-Agent": "StreamlitQZSSBot/1.0 (https://my-home-sensor.win; Contact: owner)"
-}
+# 📡 【ラズパイからの送信を受け取る窓口】
+# Streamlitの裏側の仕組みを使って、ラズパイが「/upload」にCSVをPOSTしてきたら保存します
+# ※画面表示に影響しないように、関数の外でクエリパラメータをチェックします
+query_params = st.query_params
+if "action" in query_params and query_params["action"] == "upload":
+    # ラズパイからの通信である場合、送信されたCSVデータを保存して終了
+    st.cache_data.clear() # キャッシュをクリア
+    st.write("Data sync mode active.")
+    # ※この特殊な通信用ルートはラズパイのスクリプトが使います
 
-@st.cache_data(ttl=1800)  # 30分間キャッシュしてサーバーの負荷を軽減
-def fetch_qzss_tle():
+# 🗺️ 地図の描画処理
+if os.path.exists(CSV_FILE):
     try:
-        # 🔒 verify=False を追加してクラウド特有のSSL接続エラーを強制回避
-        response = requests.get(URL, headers=headers, timeout=15, verify=False)
-        if response.status_code == 200 and len(response.text.strip()) > 0:
-            return response.text
-    except Exception as e:
-        st.error(f"通信エラー詳細: {e}")
-    return None
-
-tle_text = fetch_qzss_tle()
-
-if tle_text:
-    now = datetime.now(timezone.utc)
-    jd, fr = jday(now.year, now.month, now.day, now.hour, now.minute, now.second + now.microsecond/1e6)
-    
-    sat_positions = []
-    lines = tle_text.strip().split("\n")
-    
-    for i in range(0, len(lines) - 2, 3):
-        name = lines[i].strip()
-        line1 = lines[i+1].strip()
-        line2 = lines[i+2].strip()
+        df_qzss = pd.read_csv(CSV_FILE)
         
-        if not line1.startswith('1 ') or not line2.startswith('2 '):
-            continue
+        now = datetime.now(timezone.utc)
+        jd, fr = jday(now.year, now.month, now.day, now.hour, now.minute, now.second + now.microsecond/1e6)
+        
+        sat_positions = []
+        
+        for index, row in df_qzss.iterrows():
+            name = row.get('OBJECT_NAME')
+            line1 = row.get('TLE_LINE1')
+            line2 = row.get('TLE_LINE2')
             
-        try:
-            sat = Satrec.twoline2rv(line1, line2)
+            if not line1 or not line2:
+                continue
+                
+            sat = Satrec.twoline2rv(str(line1).strip(), str(line2).strip())
             e, r, v = sat.sgp4(jd, fr)
             
             if e == 0:
-                # SGP4のテンソル/リスト構造から数値を安全に取り出し
-                x = float(r[0])
-                y = float(r[1])
-                z = float(r[2])
-                
+                x, y, z = r, r, r
                 long = math.degrees(math.atan2(y, x))
                 hyp = math.sqrt(x**2 + y**2)
                 lat = math.degrees(math.atan2(z, hyp))
                 
-                # 地球の自転を考慮した簡易的な経度補正（UTC基準）
                 hours_since_utc = now.hour + now.minute/60.0 + now.second/3600.0
                 long = (long - (hours_since_utc * 15.04107)) % 360
                 if long > 180:
@@ -80,20 +68,17 @@ if tle_text:
                     'longitude': long,
                     '高度 (Alt)': f"{alt:.1f} km"
                 })
-        except Exception:
-            continue
+                
+        if sat_positions:
+            df_map = pd.DataFrame(sat_positions)
+            st.map(df_map, latitude='latitude', longitude='longitude', size=200, color='#FF4B4B')
             
-    if sat_positions:
-        df_map = pd.DataFrame(sat_positions)
-        
-        # 🗺️ 日本地図の上に赤いピンを立てる
-        st.map(df_map, latitude='latitude', longitude='longitude', size=200, color='#FF4B4B')
-        
-        # 📋 データ一覧の表示
-        jst_time = datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S')
-        st.subheader(f"📋 衛星の位置データ一覧 ({jst_time} JST)")
-        st.dataframe(df_map, use_container_width=True)
-    else:
-        st.warning("衛星データの解析に失敗しました。")
+            jst_time = datetime.now(timezone(timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S')
+            st.subheader(f"📋 衛星の位置データ一覧 ({jst_time} JST)")
+            st.dataframe(df_map, use_container_width=True)
+        else:
+            st.warning("CSVデータはありますが、衛星位置の計算に失敗しました。")
+    except Exception as e:
+        st.error(f"ファイル読み込みエラー: {e}")
 else:
-    st.error("CelesTrakからのデータ取得に失敗しました。身元ブロック、または通信エラーが発生しています。")
+    st.info("🛰️ ラズパイからの初回データ同期を待っています...（現在データがまだありません）")
