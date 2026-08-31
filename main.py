@@ -17,7 +17,7 @@ if st.button("🔄 画面を最新に位置更新"):
 
 # 🌐 あなたが構築したCloudflare Tunnel経由で、ラズパイの公開フォルダからCSVを引っ張ってきます
 # ※温湿度モニターのドメインをそのまま経由するので、100%確実にRenderへデータが届きます
-RASPI_CSV_URL = "https://michibiki.my-home-sensor.win"
+RASPI_CSV_URL = "https://my-home-sensor.win"
 
 @st.cache_data(ttl=60)  # 1分間キャッシュ（ラズパイへの連続アクセス負荷を軽減）
 def get_csv_from_raspi():
