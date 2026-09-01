@@ -1,5 +1,6 @@
+
 streamlit
-google-genai
-requests
 pandas
+requests
 sgp4
+datetime
